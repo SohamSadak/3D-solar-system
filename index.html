@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Solar System</title>
+  <style>
+    :root {
+      --bg: #000;
+      --fg: #fff;
+      --panel-bg: rgba(0,0,0,0.7);
+    }
+    .light {
+      --bg: #fdfdfd;
+      --fg: #000;
+      --panel-bg: rgba(255,255,255,0.75);
+    }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, sans-serif;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: var(--panel-bg);
+      padding: 10px;
+      border-radius: 8px;
+      z-index: 10;
+    }
+    #controls label {
+      display: block;
+      margin: 5px 0;
+    }
+    #pauseBtn, #themeBtn {
+      margin-top: 8px;
+      padding: 5px 10px;
+      background: #555;
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 10px;
+      display: inline-block;
+    }
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      padding: 4px 8px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      z-index: 20;
+      transform: translate(-50%, -120%);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    body.light #tooltip {
+      background: rgba(255,255,255,0.9);
+      color: #000;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.150.1/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="controls"></div>
+  <div id="tooltip"></div>
+  <script type="module">
+    import * as THREE from 'three';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    const pointLight = new THREE.PointLight(0xffffff, 1);
+    scene.add(ambientLight, pointLight);
+
+    function createStars(count = 1500) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const r = 80 + Math.random() * 120;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(THREE.MathUtils.randFloatSpread(2));
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+      }
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.PointsMaterial({ size: 0.6, depthWrite: false });
+      return new THREE.Points(geometry, material);
+    }
+    scene.add(createStars());
+
+    const sun = new THREE.Mesh(
+      new THREE.SphereGeometry(3, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0xFDB813 })
+    );
+    scene.add(sun);
+
+    const planetData = [
+      { name: 'Mercury', color: 0xaaa9ad, size: 0.35, distance: 5, speed: 0.04 },
+      { name: 'Venus',   color: 0xe5c97b, size: 0.5,  distance: 7, speed: 0.03 },
+      { name: 'Earth',   color: 0x3f51b5, size: 0.55, distance: 9, speed: 0.025 },
+      { name: 'Mars',    color: 0xb22222, size: 0.45, distance: 11, speed: 0.02 },
+      { name: 'Jupiter', color: 0xd2b48c, size: 1.2,  distance: 14, speed: 0.015 },
+      { name: 'Saturn',  color: 0xdcc57c, size: 1.0,  distance: 17, speed: 0.012 },
+      { name: 'Uranus',  color: 0x66cccc, size: 0.8,  distance: 20, speed: 0.009 },
+      { name: 'Neptune', color: 0x4169e1, size: 0.8,  distance: 23, speed: 0.007 }
+    ];
+
+    const planets = [];
+    planetData.forEach(data => {
+      const geo = new THREE.SphereGeometry(data.size, 32, 32);
+      const mat = new THREE.MeshStandardMaterial({ color: data.color });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData = { ...data, angle: Math.random() * Math.PI * 2 };
+      scene.add(mesh);
+      planets.push(mesh);
+    });
+
+    const controlsDiv = document.getElementById('controls');
+    const sliders = {};
+    planetData.forEach(p => {
+      const label = document.createElement('label');
+      label.innerHTML = `${p.name} Speed: <input type="range" min="0" max="0.1" step="0.001" value="${p.speed}"/>`;
+      controlsDiv.appendChild(label);
+      sliders[p.name] = label.querySelector('input');
+    });
+
+    const pauseBtn = document.createElement('button');
+    pauseBtn.id = 'pauseBtn';
+    pauseBtn.textContent = 'Pause';
+    controlsDiv.appendChild(pauseBtn);
+
+    const themeBtn = document.createElement('button');
+    themeBtn.id = 'themeBtn';
+    themeBtn.textContent = 'Light Mode';
+    controlsDiv.appendChild(themeBtn);
+
+    let paused = false;
+    pauseBtn.addEventListener('click', () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+    });
+
+    themeBtn.addEventListener('click', () => {
+      document.body.classList.toggle('light');
+      const isLight = document.body.classList.contains('light');
+      themeBtn.textContent = isLight ? 'Dark Mode' : 'Light Mode';
+      renderer.setClearColor(isLight ? 0xfdfdfd : 0x000000);
+    });
+
+    const tooltip = document.getElementById('tooltip');
+    function showTooltip(name, x, y) {
+      tooltip.style.left = `${x}px`;
+      tooltip.style.top = `${y}px`;
+      tooltip.textContent = name;
+      tooltip.style.opacity = 1;
+    }
+    function hideTooltip() {
+      tooltip.style.opacity = 0;
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let pointerX = 0, pointerY = 0;
+
+    window.addEventListener('pointermove', (event) => {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+    });
+
+    let targetCameraPos = null;
+    let cameraFocus = null;
+
+    window.addEventListener('click', () => {
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(planets);
+      if (intersects.length) {
+        const planet = intersects[0].object;
+        targetCameraPos = planet.position.clone().add(new THREE.Vector3(5, 3, 5));
+        cameraFocus = planet.position.clone();
+      } else {
+        targetCameraPos = new THREE.Vector3(0, 0, 40);
+        cameraFocus = new THREE.Vector3(0, 0, 0);
+      }
+    });
+
+    const defaultFocus = new THREE.Vector3(0, 0, 0);
+    camera.position.z = 40;
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(planets);
+      if (intersects.length) {
+        const planet = intersects[0].object;
+        showTooltip(planet.userData.name, pointerX, pointerY);
+      } else {
+        hideTooltip();
+      }
+
+      if (!paused) {
+        const delta = clock.getDelta();
+        planets.forEach(planet => {
+          const user = planet.userData;
+          const speed = parseFloat(sliders[user.name].value);
+          user.angle += delta * speed;
+          planet.position.x = user.distance * Math.cos(user.angle);
+          planet.position.z = user.distance * Math.sin(user.angle);
+        });
+      }
+
+      if (targetCameraPos) {
+        camera.position.lerp(targetCameraPos, 0.05);
+        if (cameraFocus) camera.lookAt(cameraFocus);
+        if (camera.position.distanceTo(targetCameraPos) < 0.1) targetCameraPos = null;
+      } else {
+        camera.lookAt(defaultFocus);
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
